@@ -292,3 +292,109 @@ GO
 SELECT * FROM  dbo.PersonPhone
 	WHERE [BusinessEntityID] = 297 OR [BusinessEntityID] = 99999999;
 GO
+/*
+a) Создайте таблицу Sales.CurrencyHst, которая будет хранить информацию об изменениях в таблице Sales.Currency.
+Обязательные поля, которые должны присутствовать в таблице: 
+	ID — первичный ключ IDENTITY(1,1); 
+	Action — совершенное действие (insert, update или delete); 
+	ModifiedDate — дата и время, когда была совершена операция; 
+	SourceID — первичный ключ исходной таблицы; 
+	UserName — имя пользователя, совершившего операцию. 
+Создайте другие поля, если считаете их нужными.
+*/
+DROP TABLE IF EXISTS Sales.CurrencyHst
+GO
+CREATE TABLE Sales.CurrencyHst
+(
+    [ID] INT IDENTITY (1,1) PRIMARY KEY,
+    [Action] CHAR(6) NOT NULL CHECK ([Action] in ('insert', 'update', 'delete')),
+    [ModifiedDate] DATETIME NOT NULL,
+    [SourceID] NCHAR(3) NOT NULL,
+    [UserName] VARCHAR(50) NOT NULL
+);
+GO
+
+/*
+b) Создайте три AFTER триггера для трех операций INSERT, UPDATE, DELETE для таблицы Sales.Currency. 
+Каждый триггер должен заполнять таблицу Sales.CurrencyHst с указанием типа операции в поле Action.
+*/
+-- INSERT
+CREATE TRIGGER TR_SalesCurrency_AfterInsert
+	ON Sales.Currency
+AFTER INSERT AS 
+BEGIN
+	INSERT INTO Sales.CurrencyHst(
+		[Action], 
+		[ModifiedDate], 
+		[SourceID], 
+		[UserName]
+	)
+	SELECT 
+		'insert', 
+		CURRENT_TIMESTAMP, 
+		CurrencyCode, 
+		CURRENT_USER
+	FROM inserted;
+END
+GO
+
+
+-- DELETE
+CREATE TRIGGER TR_SalesCurrency_AfterDelete
+	ON Sales.Currency
+AFTER DELETE AS 
+BEGIN
+	INSERT INTO Sales.CurrencyHst(
+		[Action], 
+		[ModifiedDate], 
+		[SourceID], 
+		[UserName]
+	)
+	SELECT 
+		'delete', 
+		CURRENT_TIMESTAMP, 
+		CurrencyCode, 
+		CURRENT_USER
+	FROM deleted;
+END
+GO
+
+
+-- UPDATE
+CREATE TRIGGER TR_SalesCurrency_AfterUpdate
+	ON Sales.Currency
+AFTER UPDATE AS 
+BEGIN
+	INSERT INTO Sales.CurrencyHst(
+		[Action], 
+		[ModifiedDate], 
+		[SourceID], 
+		[UserName]
+	)
+	SELECT 
+		'update', 
+		CURRENT_TIMESTAMP, 
+		CurrencyCode, 
+		CURRENT_USER
+	FROM deleted;
+END
+GO
+
+/*
+c) Создайте представление VIEW, отображающее все поля таблицы Sales.Currency. 
+Сделайте невозможным просмотр исходного кода представления.
+*/
+DROP VIEW IF EXISTS Sales.vCurrency
+GO
+CREATE VIEW Sales.vCurrency 
+	WITH ENCRYPTION AS
+		SELECT * FROM Sales.Currency;
+GO
+
+-- Проверка того, что получить представление невозможно
+SELECT  
+	definition    
+FROM sys.sql_modules 
+WHERE 
+	OBJECT_ID = OBJECT_ID('Sales.vCurrency');
+GO
